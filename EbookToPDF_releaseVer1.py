@@ -6,6 +6,8 @@ import mss.tools
 import pyautogui
 import natsort
 import shutil
+import subprocess
+import shlex
 
 from pynput import mouse
 from pynput.keyboard import Key, Controller
@@ -226,6 +228,9 @@ class MainWindow(QMainWindow):
         self.speed = self.speed_slider.value() / 10.0
         self.speed_label.setText(f'Capture Speed : {self.speed : .1f}sec')
 
+    def send_right_arrow(self):
+        subprocess.run(["osascript", "-e", 'tell application "System Events" to key code 124'], check=False)
+
     def click_btn(self):
         if self.prompt_tot_page.text() == '':
             self.stat.setText('Input Pages')
@@ -286,8 +291,7 @@ class MainWindow(QMainWindow):
                 QApplication.processEvents()  # Update UI
 
                 # Next Page
-                kb_control.press(Key.right)
-                kb_control.release(Key.right)
+                self.send_right_arrow()
 
                 self.num += 1
 
