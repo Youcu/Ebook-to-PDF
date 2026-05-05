@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         self.prompt_tot_page = QLineEdit() # Editable Line, prompt
         self.prompt_PDF_name = QLineEdit() # Editable Line
 
-        self.prompt_tot_page.setPlaceholderText(" Input Total Pages. (If format 1/n -> (n-1))")
+        self.prompt_tot_page.setPlaceholderText(" Input Total Pages.")
         self.prompt_PDF_name.setPlaceholderText(" Input PDF Name.")
 
         # Input Box
@@ -329,7 +329,7 @@ class MainWindow(QMainWindow):
 
             # 사용자 홈 디렉토리 기준 경로 설정
             home_dir = os.path.expanduser("~")  # '~'를 사용자 홈 디렉토리로 확장
-            save_path = os.path.join(home_dir, "UniversityBooks")  # '~/UniversityBooks' 경로 생성
+            save_path = os.path.join(home_dir, "MyEbooks")
 
             # 폴더가 없으면 생성
             os.makedirs(save_path, exist_ok=True)
