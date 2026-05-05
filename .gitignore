@@ -1,2 +1,4 @@
 pdf_images
 **/__pycache__
+build
+dist
