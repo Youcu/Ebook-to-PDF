@@ -16,6 +16,13 @@ Ebook PDF Extractor는 macOS 환경에서 Ebook Viewer의 화면을 페이지 �
 
 ---
 
+## 주의사항
+
+DRM 정책으로 인해, 모든 Ebook Viwer에서 동작하지는 않는다.
+현재까지 확인된 바로는, 알라딘 뷰어에서는 정상 동작한다. 
+
+---
+
 ## 버전 안내
 
 ### 초기 버전
