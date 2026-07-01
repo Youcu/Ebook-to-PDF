@@ -82,6 +82,29 @@ class CaptureWorker(QThread):
     def _send_next_page_key(self) -> None:
         pyautogui.press("right")
 
+    def _move_mouse_out_of_region(self, region: Dict[str, int]) -> None:
+        screen_width, screen_height = pyautogui.size()
+        left = int(region["left"])
+        top = int(region["top"])
+        right = left + int(region["width"])
+        bottom = top + int(region["height"])
+
+        margin = 20
+        # 영역 위쪽 공간이 있으면 위로, 없으면 아래/좌/우 순으로 영역 밖 지점 선택
+        if top > margin:
+            target_x, target_y = left, top - margin
+        elif bottom < screen_height - margin:
+            target_x, target_y = left, bottom + margin
+        elif left > margin:
+            target_x, target_y = left - margin, top
+        else:
+            target_x, target_y = right + margin, top
+
+        # 화면 경계 안으로 보정
+        target_x = max(0, min(target_x, screen_width - 1))
+        target_y = max(0, min(target_y, screen_height - 1))
+        pyautogui.moveTo(target_x, target_y)
+
     def _capture_region_quartz(self, region: Dict[str, int], output_path: str) -> bool:
         if Quartz is None:
             return False
@@ -151,6 +174,8 @@ class CaptureWorker(QThread):
                 int(self.config.focus_point[0]) + 10,
                 int(self.config.focus_point[1]) + 10,
             )
+            # 활성화는 유지한 채 마우스 포인터만 캡처 영역 밖으로 이동
+            self._move_mouse_out_of_region(interaction_region)
             initial_settle = max(float(self.config.speed), 0.1)
             time.sleep(initial_settle)
 

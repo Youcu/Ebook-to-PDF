@@ -84,6 +84,94 @@ DRM 정책으로 인해, 모든 Ebook Viwer에서 동작하지는 않는다.
 5. 캡처 영역 좌표 계산 방식
 6. 이미지 저장 및 PDF 병합 로직
 
+### CLI 실행
+CLI로 실행하고자 한다면, 위의 권한사항들을 손쉬운 사용에서 허용하신 후 다음 명령어를 입력하시면 됩니다.
+``` python
+pip install -r requirements.txt
+python main.py
+```
+### DMG Build
+Custom한것으로 dmg build하고 싶다면 다음과 같은 절차를 따라주시면 됩니다.
+
+#### 사전 준비
+
+- macOS 환경 (`hdiutil`, `codesign`, `osascript`는 macOS 기본 제공)
+- 프로젝트 루트에서 작업 (`main.py`, `build.zsh`가 있는 디렉터리)
+
+#### 한 번에 빌드 (권장)
+
+`build.zsh` 하나로 의존성 설치 → 문법 검사 → 앱 번들 빌드 → 서명 → DMG 생성까지 모두 수행됩니다.
+
+``` zsh
+./build.zsh
+```
+
+위 스크립트는 내부적으로 다음을 순서대로 실행합니다.
+
+1. `build`/`dist` 디렉터리 정리
+2. `.venv` 가상환경 생성 (없을 경우) 및 활성화
+3. `pip install -r requirements.txt` 로 의존성 설치 (`pyinstaller` 포함)
+4. `main.py`, `permission_utils.py`, `capture_worker.py` 문법 검사 (`py_compile`)
+5. `pyinstaller --clean --noconfirm EbookToPDF.spec` 로 `dist/EbookToPDF.app` 생성
+6. `codesign` 으로 서명 및 검증 (기본 ad-hoc, `CODESIGN_IDENTITY` 지정 시 안정 서명 — 아래 참고)
+7. `make_dmg.zsh` 실행으로 `dist/EbookToPDF.dmg` 생성
+
+빌드가 완료되면 결과물은 다음 위치에 생성됩니다.
+
+- 앱 번들: `dist/EbookToPDF.app`
+- 설치 이미지: `dist/EbookToPDF.dmg`
+
+#### DMG만 다시 생성
+
+앱 번들(`dist/EbookToPDF.app`)이 이미 빌드되어 있는 상태에서 DMG만 다시 만들고 싶다면 다음을 실행합니다.
+
+``` zsh
+./make_dmg.zsh
+```
+
+이 스크립트는 `dist/EbookToPDF.app`를 스테이징 폴더에 복사하고 `/Applications` 심볼릭 링크를 추가한 뒤, 드래그-앤-드롭 설치용 레이아웃(아이콘 배치)을 적용해 압축된 `dist/EbookToPDF.dmg`를 생성합니다.
+앱 번들이 없으면 먼저 `./build.zsh`를 실행하라는 안내와 함께 종료됩니다.
+
+#### 재빌드 시 권한이 풀리는 문제 (중요)
+
+ad-hoc 서명(`codesign --sign -`)은 **재빌드할 때마다 코드 서명 신원(cdhash)이 바뀝니다.**
+macOS 권한 시스템(TCC)은 권한을 *번들 식별자 + 코드 서명 동일성* 으로 식별하므로, 같은 이름·같은 번들 id 라도
+새로 빌드한 앱은 TCC 입장에서 "다른 앱"이 됩니다. 그 결과:
+
+- 시스템 설정의 권한 토글이 **과거 빌드에 묶인 잔존 항목**을 가리켜, 새 빌드에서 화면 캡처/자동 클릭이 동작하지 않습니다.
+- 앱을 삭제해도 TCC 항목은 남으며, 버전을 올려도 TCC는 버전을 키로 쓰지 않습니다. 토글을 off 해도 잔존 항목만 꺼질 뿐입니다.
+
+**해결: 기존 권한 항목을 제거한 뒤 다시 받기.** 빌드 시 `--reset-permissions` 플래그를 주면 빌드 후 자동으로 정리합니다.
+
+``` zsh
+./build.zsh --reset-permissions
+```
+
+또는 빌드와 별개로 정리만 하려면:
+
+``` zsh
+./reset_permissions.zsh
+```
+
+이 스크립트는 이 앱이 실제로 사용하는 권한 서비스 3개만 제거합니다 — `ScreenCapture`(화면 기록),
+`Accessibility`(자동 클릭/키 입력), `ListenEvent`(입력 모니터링).
+정리 후 앱을 다시 실행하면 권한을 새로 요청합니다.
+ad-hoc 빌드 특성상 새 빌드는 매번 새 신원이므로, **재빌드 후 권한이 풀렸다면 다시 `--reset-permissions` 로 정리**하면 됩니다.
+
+#### 빌드 결과 확인
+
+서명/권한 동작은 내부 바이너리를 직접 실행하기보다 앱 번들을 통해 확인하는 것이 정확합니다.
+
+``` zsh
+open -n "dist/EbookToPDF.app"
+```
+
+#### 참고
+
+- `EbookToPDF.spec` 는 PyInstaller 빌드 설정 파일입니다. 앱 이름, 아이콘, 포함 리소스 등을 변경하려면 이 파일을 수정하십시오. 권한 리셋에 쓰이는 번들 식별자(`com.local.ebooktopdf`)도 이 파일의 `bundle_identifier` 값과 `reset_permissions.zsh` 의 `BUNDLE_ID` 가 일치해야 합니다.
+- 본 빌드는 ad-hoc 서명(`codesign --sign -`)을 사용하므로 Apple 공증(notarization)은 적용되지 않습니다. 따라서 다른 사용자의 Mac에서 처음 실행할 때 Gatekeeper 경고가 표시될 수 있으며, `우클릭 → 열기` 또는 보안 설정에서 실행을 허용해야 할 수 있습니다.
+- 코드를 수정한 경우 `./build.zsh` 를 다시 실행하면 변경 사항이 반영된 앱과 DMG가 새로 생성됩니다.
+
 ---
 
 ## 사용자
@@ -93,7 +181,7 @@ DRM 정책으로 인해, 모든 Ebook Viwer에서 동작하지는 않는다.
 
 ---
 
-## 1. 권한 허용
+### 1. 권한 허용
 
 프로그램 실행 후 권한 관련 버튼이 여러 개 표시될 수 있습니다.
 
@@ -108,7 +196,7 @@ DRM 정책으로 인해, 모든 Ebook Viwer에서 동작하지는 않는다.
 
 ---
 
-## 2. 좌표 지정
+### 2. 좌표 지정
 
 좌표 지정은 PDF로 변환할 페이지 영역을 설정하는 단계입니다.
 
@@ -127,7 +215,7 @@ DRM 정책으로 인해, 모든 Ebook Viwer에서 동작하지는 않는다.
 
 ---
 
-## 3. 페이지 수 입력
+### 3. 페이지 수 입력
 
 Ebook Viewer에서 전체 페이지 수를 확인한 뒤, 프로그램에 입력합니다.
 
@@ -140,7 +228,7 @@ Ebook Viewer에서 전체 페이지 수를 확인한 뒤, 프로그램에 입력
 
 ---
 
-## 4. PDF 파일명 입력
+### 4. PDF 파일명 입력
 
 생성할 PDF 파일명을 입력합니다.
 
@@ -149,7 +237,7 @@ Ebook Viewer에서 전체 페이지 수를 확인한 뒤, 프로그램에 입력
 
 ---
 
-## 5. 속도 설정
+### 5. 속도 설정
 
 페이지 전환 및 캡처 사이의 대기 시간을 설정합니다.
 
@@ -165,7 +253,7 @@ Viewer 반응 속도가 느리거나 페이지 전환 애니메이션이 긴 경
 
 ---
 
-## 6. PDF 생성
+### 6. PDF 생성
 
 모든 설정을 완료한 뒤 `Create PDF` 버튼을 클릭합니다.
 
@@ -186,7 +274,7 @@ PDF 생성 중에는 다음 행동을 하지 마십시오.
 
 ---
 
-## 7. PDF 열기
+### 7. PDF 열기
 
 PDF 생성이 완료되면 `Open PDF` 버튼을 통해 결과물을 확인할 수 있습니다.
 
